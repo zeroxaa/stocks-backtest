@@ -36,6 +36,29 @@ Re-running is safe: each ticker/interval resumes from the last covered day.
 
 The script reads a sandbox token from `/home/user/.rebyte.ai/auth.json` and POSTs to the Rebyte stocks bars endpoint. Adapt `fetch_bars()` if you're calling a different upstream (Polygon, Alpaca, etc.) — the rest of the pipeline is provider-agnostic.
 
+## Backtest
+
+`backtest.py` runs a long-only trend-following strategy on any ticker in the DB:
+long when daily close > N-day SMA, cash otherwise.
+
+```bash
+pip install vectorbt
+python backtest.py                        # SPY, 200d SMA, $10k
+python backtest.py --ticker QQQ --sma 100 # different ticker / window
+```
+
+Sample output (SPY, 200d SMA, 2022-01-22 → 2026-04-24):
+
+| Metric | Strategy | Buy & Hold |
+|---|---:|---:|
+| Total return | 49.73% | 63.56% |
+| Max drawdown | **11.57%** | 22.66% |
+| Sharpe | **1.11** | 0.86 |
+| Calmar | **1.18** | 0.75 |
+| Time in market | 72.72% | 100% |
+
+Classic trend-filter result: gives up some upside, cuts drawdown roughly in half, improves risk-adjusted return. The strategy spent most of 2022 in cash and avoided that bear market.
+
 ## DB file
 
 The actual `.duckdb` file is gitignored — at 1-minute resolution × 5 years × ~40 large-cap tickers it grows to ~2 GB. Re-generate locally with `python ingest.py`.
