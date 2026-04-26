@@ -38,26 +38,45 @@ The script reads a sandbox token from `/home/user/.rebyte.ai/auth.json` and POST
 
 ## Backtest
 
-`backtest.py` runs a long-only trend-following strategy on any ticker in the DB:
-long when daily close > N-day SMA, cash otherwise.
+`backtest.py` compares several long-only timing strategies on a single ticker.
+All strategies are pure on/off (full position or cash); signals decided at
+today's close apply to tomorrow's close-to-close return. Overnight-only is
+the exception — it captures only the close→next-open gap.
 
 ```bash
-pip install vectorbt
-python backtest.py                        # SPY, 200d SMA, $10k
-python backtest.py --ticker QQQ --sma 100 # different ticker / window
+python backtest.py                # SPY, default $10k
+python backtest.py --ticker QQQ   # any ticker in the DB
 ```
 
-Sample output (SPY, 200d SMA, 2022-01-22 → 2026-04-24):
+Strategies compared:
+- **Buy & Hold** — baseline
+- **SMA(N) trend** — long when close > N-day SMA, cash otherwise (N = 50/100/200)
+- **EMA(N) trend** — same with exponential MA (N = 50/200)
+- **Connors RSI(2) 10/70** — buy when 2-day RSI < 10, exit when > 70 (mean reversion)
+- **Overnight-only** — capture the close → next-open gap, sit out the day
 
-| Metric | Strategy | Buy & Hold |
-|---|---:|---:|
-| Total return | 49.73% | 63.56% |
-| Max drawdown | **11.57%** | 22.66% |
-| Sharpe | **1.11** | 0.86 |
-| Calmar | **1.18** | 0.75 |
-| Time in market | 72.72% | 100% |
+### Sample output (SPY, 2022-02-08 → 2026-04-24, 1056 sessions, $10k start)
 
-Classic trend-filter result: gives up some upside, cuts drawdown roughly in half, improves risk-adjusted return. The strategy spent most of 2022 in cash and avoided that bear market.
+| Strategy | End $ | CAGR | Sharpe | MaxDD | TIM | Trades |
+|---|---:|---:|---:|---:|---:|---:|
+| Buy & Hold | $15,884 | 11.68% | 0.73 | 22.68% | 100% | 1 |
+| SMA(50) trend | $13,683 | 7.77% | 0.77 | 17.33% | 66.7% | 32 |
+| **SMA(100) trend** | **$14,883** | **9.95%** | **0.95** | **12.09%** | 70.9% | 17 |
+| SMA(200) trend | $14,079 | 8.51% | 0.82 | 14.25% | 72.7% | 16 |
+| EMA(50) trend | $13,740 | 7.88% | 0.77 | 16.00% | 68.3% | 38 |
+| EMA(200) trend | $14,338 | 8.98% | 0.85 | 13.35% | 72.6% | 17 |
+| Connors RSI(2) 10/70 | $14,124 | 8.59% | 0.86 | **11.36%** | 23.0% | 54 |
+| Overnight-only | $12,448 | 5.37% | 0.55 | 19.50% | 99.9% | 1 |
+
+### Reading the table
+
+- **Buy & Hold wins on raw return** but the worst Sharpe and the biggest drawdown of the trend strategies.
+- **SMA(100)** is the sweet spot here — best Sharpe, tightest drawdown of the trend group, only 17 trades.
+- **Connors RSI(2)** has the smallest drawdown and decent Sharpe while only being in the market 23% of the time — capital efficient if you have other things to do with your cash.
+- **Overnight-only** is a famous "anomaly" but on this 2022-2026 window it's been weak — the historical edge has degraded materially since ~2019. Not a standalone strategy anymore on SPY.
+- **EMA vs SMA**: very similar; EMA reacts faster, so more trades and more whipsaw.
+
+Treat these as illustrative, not investment advice — no fees / slippage / tax modeled, and 4 years is a small sample (one bear, one recovery). To make any of these production-real you'd want to test across multiple decades + multi-ticker robustness checks.
 
 ## DB file
 
